@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Simulation outputs — too large for git
+*.db
+results/*.csv
+
+# Keep plots (small PNGs are fine to commit)
+!results/*.png

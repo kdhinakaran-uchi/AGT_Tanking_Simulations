@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv add *)",
+      "Bash(uv run *)",
+      "Bash(python -c \"import sys; [print\\(l\\) for l in sys.stdin.read\\(\\).split\\('\\)]'\\)]\")"
+    ]
+  }
+}
