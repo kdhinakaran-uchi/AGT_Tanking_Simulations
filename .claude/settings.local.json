@@ -3,7 +3,8 @@
     "allow": [
       "Bash(uv add *)",
       "Bash(uv run *)",
-      "Bash(python -c \"import sys; [print\\(l\\) for l in sys.stdin.read\\(\\).split\\('\\)]'\\)]\")"
+      "Bash(python -c \"import sys; [print\\(l\\) for l in sys.stdin.read\\(\\).split\\('\\)]'\\)]\")",
+      "PowerShell(cd \"c:\\\\Users\\\\MBAUser\\\\Documents\\\\Classes\\\\06. Spring 2026\\\\04. Topics in algorithmic game theory\\\\Final project\\\\AGT_Tanking_Simulations\"; git status; Write-Host \"---\"; \"{0:N1} MB\" -f \\(\\(Get-Item tanking_sim.db\\).Length / 1MB\\); Get-ChildItem results/ | ForEach-Object { \"{0,8:N0} KB  {1}\" -f \\($_.Length / 1KB\\), $_.Name })"
     ]
   }
 }
