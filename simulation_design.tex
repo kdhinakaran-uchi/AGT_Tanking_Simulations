@@ -1,0 +1,268 @@
+% ============================================================
+%  Section 5: Simulation Design
+% ============================================================
+
+\section{Simulation Design}
+
+\subsection{Overview}
+
+To evaluate the three draft mechanisms under study, we build a multi-agent
+simulation in which each NBA franchise is represented by an agent that receives
+the current standings, its remaining schedule, the lottery odds structure for
+the active mechanism, and the reward parameters, and then decides how much
+effort to exert at regular intervals throughout the season.
+We implement two classes of strategic agent.
+The first is a \emph{rational agent} that maximizes expected utility analytically
+at each decision point.
+The second is an \emph{LLM agent} in which the team is represented by
+\texttt{claude-haiku-4-5}; the model receives a structured natural-language
+prompt describing the game state and reward structure and returns a continuous
+effort level together with its reasoning.
+Neither agent type encodes a hardcoded tanking rule: strategies emerge
+endogenously from the incentive environment.
+This lets us test whether the theoretical properties of each mechanism survive
+contact with adaptive, strategically sophisticated agents---a more demanding
+standard than the rule-based simulations used in prior work
+\citep{kazachkov2020, highley2026}.
+
+\subsection{Formal Model}
+
+\paragraph{Teams and skills.}
+There are $n = 30$ teams indexed $i = 1, \ldots, 30$.
+Each team $i$ has a true skill level $\alpha_i$ drawn i.i.d.\ from a
+log-normal distribution $\alpha_i \sim \text{LogNormal}(0,\, 0.3)$,
+then sorted in ascending order so that team~1 is initially the weakest.
+This calibration produces a realistic spread of talent: roughly $\pm 30\%$
+around the league mean.
+
+\paragraph{Season structure.}
+Each team plays $G = 82$ games against opponents drawn from a balanced
+round-robin schedule.
+At season's end, the top $P = 16$ teams by win total qualify for the playoffs.
+The remaining $L = 14$ teams enter the draft lottery under whichever mechanism
+is active.
+
+\paragraph{Win probability.}
+We model game outcomes with a ratio model that incorporates an effort floor
+$\delta = 0.3$.
+When team $i$ plays at effort level $e_i \in [0,1]$ and team $j$ plays at
+$e_j \in [0,1]$, their effective strengths are
+\[
+    \tilde{\alpha}_k = \alpha_k \bigl(\delta + (1 - \delta)\, e_k\bigr),
+    \quad k \in \{i, j\},
+\]
+and the probability that team $i$ wins is
+\[
+    \Pr[\text{$i$ beats $j$}]
+    = \frac{\tilde{\alpha}_i}{\tilde{\alpha}_i + \tilde{\alpha}_j}.
+\]
+The floor $\delta$ captures the fact that teams cannot perfectly throw a game:
+even at $e = 0$ a team still plays at $30\%$ of its true strength.
+At full effort ($e = 1$), $\tilde{\alpha}_i = \alpha_i$ and the model reduces
+to a standard Bradley--Terry pairwise comparison.
+
+\paragraph{Agent effort and decisions.}
+Rather than a binary tank/try choice, agents select an effort level from the
+discrete grid $e \in \{0,\; 0.25,\; 0.5,\; 0.75,\; 1.0\}$.
+Values below $0.5$ are counted as a \emph{tanking decision} for reporting
+purposes.
+To reduce the number of API calls and to model realistic mid-season strategy
+adjustments, decisions are made at \emph{checkpoints} spaced every 10 games
+(games 0, 10, 20, \ldots, 70), giving each team 8 decisions per season.
+The chosen effort level is held constant until the next checkpoint.
+
+\paragraph{Payoffs.}
+Each team's utility depends on whether it qualifies for the playoffs and, if
+not, on which draft pick it receives.
+Making the playoffs yields a value of $V = 50$, calibrated so that a playoff
+berth is worth roughly half of the top draft pick.
+For a non-playoff team assigned draft pick $k \in \{1, \ldots, 14\}$, the
+draft payoff follows an empirically calibrated declining schedule:
+\[
+    D(k) \in \{100,\; 65,\; 45,\; 30,\; 22,\; 17,\; 13,\; 10,\;
+               8,\; 7,\; 6,\; 5,\; 4,\; 3\},
+\]
+for $k = 1, \ldots, 14$ respectively, reflecting real NBA draft-pick trade
+values.
+Picks outside the lottery (positions $15$--$30$, awarded to playoff teams in
+reverse order of their record) have a default value of $2$.
+
+\paragraph{Lottery odds.}
+For the current NBA lottery and the bilevel mechanism, lottery odds are
+assigned by a weighted draw over the 14 non-playoff teams using the
+2019-reform ticket weights
+\[
+    w = [140,\; 140,\; 140,\; 125,\; 105,\; 90,\; 75,\; 60,\;
+         45,\; 30,\; 20,\; 15,\; 10,\; 5],
+\]
+where $w_1$ corresponds to the team with the worst record (or worst lock-point
+record for bilevel).
+The lottery determines picks 1--4 by sequential weighted sampling without
+replacement; picks 5--14 are awarded in reverse-standings order.
+Under COLA, draft order is determined entirely by accumulated ticket counts
+rather than by a random draw; the team with the most tickets earns pick~1.
+
+\paragraph{Multi-season skill dynamics.}
+Because we simulate $S = 50$ seasons, team skills evolve over time.
+After each season, the skill of team $i$ is updated as
+\[
+    \alpha_i^{t+1}
+    = \operatorname{clip}\!\Bigl(
+        \alpha_i^t
+        - r\bigl(\alpha_i^t - \bar{\alpha}\bigr)
+        + \phi\Bigl(1 - \frac{2(k_i^t - 1)}{n - 1}\Bigr),\;
+        \alpha_{\min},\; \alpha_{\max}
+      \Bigr),
+\]
+where $r = 0.10$ is a mean-reversion rate toward the league average
+$\bar{\alpha} = 1.0$, $\phi = 0.06$ is the draft-pick boost magnitude,
+$k_i^t$ is the draft pick received in season $t$, and the clip bounds are
+$\alpha_{\min} = 0.25$ and $\alpha_{\max} = 2.50$.
+Pick~1 delivers the maximum positive boost $(+\phi)$; the median pick delivers
+no boost; pick~$n$ delivers the maximum penalty $(-\phi)$.
+This dynamic creates the feedback loop between tanking incentives and
+competitive balance that the reform mechanisms aim to address.
+
+\subsection{LLM Agent Design}
+
+Each of the 30 teams can be represented by an LLM agent instantiated with
+\texttt{claude-haiku-4-5}.
+At each checkpoint, the agent receives a structured prompt containing:
+\begin{enumerate}
+  \item its current win--loss record and rank among all 30 teams,
+  \item the number of games completed and remaining in the season,
+  \item the current standings for all 30 teams,
+  \item the playoff cutoff and its probability of qualifying under honest play,
+  \item a description of the active lottery mechanism and the expected draft
+        pick value it would receive at each possible finishing position, and
+  \item the full payoff schedule $V$ and $D(\cdot)$.
+\end{enumerate}
+A system-level prompt (cached per agent instance to reduce API cost)
+explains the league rules, the scoring structure, and asks the agent to
+return a JSON object \verb|{"effort": <float in [0,1]>, "reasoning": <string>}|.
+No behavioral heuristic or tanking rule is encoded; the agent must reason from
+the payoff structure alone.
+Agents do not observe each other's decisions before making their own; choices
+are made simultaneously at each checkpoint and resolved together.
+For COLA, agents additionally receive their current ticket stockpile and a
+description of the carryover and penalty rules, enabling multi-period reasoning.
+
+\paragraph{Rational-agent surrogate.}
+Because LLM agent runs are expensive, we also implement a \emph{rational agent}
+that maximizes expected utility analytically.
+At each checkpoint, the rational agent evaluates EU over the discrete effort
+grid $\{0, 0.25, 0.5, 0.75, 1.0\}$ using a pre-computed Monte Carlo EV table
+(5{,}000 lottery simulations) and the same projected-rank heuristic described
+in Section~\ref{sec:metrics}.
+Expected pick values under COLA are uniform across all lottery ranks---the
+mechanism's key incentive-compatibility property---so rational agents under
+COLA find no benefit to tanking within a season.
+The rational agent provides a reproducible, deterministic baseline for the
+systematic experiments in Section~5.5; the LLM agent is used for qualitative
+validation of whether the same strategic patterns emerge in a less constrained
+agent.
+
+\subsection{Baseline: Honest Equilibrium}
+
+Before running the strategic conditions, we establish a baseline by simulating
+50 seasons under each mechanism with all 30 teams represented by a
+\emph{honest agent} that always exerts full effort ($e = 1$) regardless of
+incentives.
+This baseline serves two purposes.
+First, it provides a reference distribution for competitive balance: the
+Kendall tau distance between final standings and the true skill ranking
+$(\alpha_1 \leq \cdots \leq \alpha_{30})$ under honest play is the best
+achievable outcome for the draft mechanism, since no tanking distorts
+standings.
+Second, it isolates the effect of stochastic game outcomes on competitive
+balance from the effect of strategic behavior.
+Under honest play, all three mechanisms produce identical tanking rates (zero
+by construction) and near-identical competitive balance, confirming that any
+observed divergence in the strategic conditions is attributable to the
+incentive structure rather than to differences in how mechanisms handle
+ties or ticket accumulation.
+
+\subsection{Experimental Conditions}
+
+We run five experimental conditions, summarized in Table~\ref{tab:conditions}.
+Conditions A through C hold the mechanism fixed at the current NBA lottery and
+vary the proportion of strategic agents, tracing the unraveling of the honest
+equilibrium as rational behavior spreads.
+Conditions D and E replace the current lottery with a reform mechanism while
+keeping all agents strategic, testing whether the theoretical guarantees of
+each reform survive adaptive behavior.
+
+\begin{table}[h]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{cllp{5.5cm}}
+\hline
+\textbf{Cond.} & \textbf{Mechanism} & \textbf{Agent type} & \textbf{Purpose} \\
+\hline
+A & Current NBA (2019) & All honest
+  & Baseline: competitive balance under zero tanking \\
+B & Current NBA (2019) & Mixed: 1 rational, 29 honest
+  & Does a single strategic team unravel the honest equilibrium? \\
+C & Current NBA (2019) & All rational
+  & Equilibrium tanking level under the current system \\
+D & Bilevel ranking \citep{kazachkov2020} & All rational
+  & Does the bilevel guarantee hold against strategic agents? \\
+E & COLA \citep{highley2026} & All rational
+  & Does COLA's incentive compatibility hold against strategic agents? \\
+\hline
+\end{tabular}
+\caption{Experimental conditions. ``Rational'' agents maximize expected
+utility; ``honest'' agents always exert full effort.}
+\label{tab:conditions}
+\end{table}
+
+Each condition is run for $S = 50$ seasons.
+In the mixed-population experiment (Condition~B), the single rational agent is
+assigned to the team with the highest team ID (initially one of the stronger
+teams), following the implementation in our codebase.
+We additionally run a \emph{mixed-population sweep} that varies the number of
+rational teams in $\{0, 1, 5, 15, 30\}$ under the current NBA lottery to
+characterize how the aggregate tanking rate scales with the proportion of
+strategic actors, and a \emph{playoff-value sensitivity sweep} that varies $V$
+over $\{10, 30, 50, 80, 120\}$ to identify the threshold at which playoff
+incentives dominate lottery incentives.
+
+\subsection{Metrics}
+\label{sec:metrics}
+
+We evaluate each condition on three metrics.
+
+\paragraph{Tanking rate.}
+The fraction of all agent decisions in a season in which the chosen effort level
+satisfies $e < 0.5$.
+Because each of the 30 teams makes 8 decisions per season, the denominator is
+$30 \times 8 = 240$ decisions per season-run.
+A higher tanking rate indicates that the mechanism creates stronger incentives
+to underperform.
+
+\paragraph{Competitive balance (Kendall tau distance).}
+Following \citet{kazachkov2020}, we measure competitive balance as the
+normalized Kendall tau distance between the final standings ranking and the
+true skill ranking over all $n = 30$ teams:
+\[
+    K(\sigma, \tau)
+    = \frac{\bigl|\{(i,j) : \sigma(i) < \sigma(j)
+                  \text{ but } \tau(i) > \tau(j)\}\bigr|}{\binom{n}{2}},
+\]
+where $\sigma$ is the ranking by end-of-season win total (rank~1 $=$ most wins)
+and $\tau$ is the ranking by true skill $\alpha_i$ (rank~1 $=$ highest skill).
+$K \in [0,1]$, with $K = 0$ indicating that standings perfectly reflect true
+talent and $K = 1$ indicating a complete reversal.
+Because skills evolve across seasons via the draft-pick update rule, we compute
+$K$ each season using the skill vector $(\alpha_i^t)$ at the \emph{start} of
+that season (before skills are updated), which is recorded in the
+\texttt{skill\_history} table.
+
+\paragraph{Draft efficiency.}
+The average draft pick received by teams in each initial-skill quartile.
+Teams in the bottom quartile (weakest 25\% by initial $\alpha_i$) should
+receive the lowest pick numbers (best picks) if the mechanism is working as
+intended.
+We report the mean pick number for each quartile $Q \in \{1, 2, 3, 4\}$
+averaged over all seasons and seeds; lower values for $Q = 1$ indicate better
+redistributive efficiency.
