@@ -545,7 +545,7 @@ def main() -> None:
         # (rational, all 30 rational, playoff_value=50). This excludes sweep runs.
         seen_mechs: set[str] = set()
         standard_runs = []
-        for r in runs:
+        for r in sorted(runs, key=lambda r: -r["n_seasons"]):
             params = json.loads(r["params"])
             if (
                 r["agent_type"] == "rational"

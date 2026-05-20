@@ -103,7 +103,11 @@ class Season:
             a_w, a_l = team_a.wins, team_a.losses
             b_w, b_l = team_b.wins, team_b.losses
 
-            winner, _ = simulate_game(team_a, eff_a, team_b, eff_b, self._rng)
+            winner, loser = simulate_game(team_a, eff_a, team_b, eff_b, self._rng)
+
+            # Hook for mechanisms that track per-game outcomes (e.g. WeightedLossMechanism)
+            if hasattr(self.mechanism, "record_game_loss"):
+                self.mechanism.record_game_loss(game_idx, loser.team_id, self.games_per_team)
 
             if self.db:
                 self.db.insert_game(

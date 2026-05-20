@@ -36,6 +36,8 @@ from simulation.skill_update import update_skills
 from mechanisms.nba_lottery import NBALottery
 from mechanisms.bilevel import BilevelMechanism
 from mechanisms.cola import COLAMechanism
+from mechanisms.weighted_loss import WeightedLossMechanism, exponential_decay
+from mechanisms.nba_321_lottery import NBAThreeTwoOneLottery
 from mechanisms.base import DraftMechanism
 from agents.base import Agent
 from agents.rational import RationalAgent, PICK_VALUES
@@ -200,11 +202,13 @@ def run_experiment(
 # ── experiment presets ────────────────────────────────────────────────────────
 
 def run_standard(args, db):
-    """Compare all three mechanisms head-to-head."""
+    """Compare all mechanisms head-to-head."""
     mechanisms = {
         "nba": NBALottery(),
         "bilevel": BilevelMechanism(),
         "cola": COLAMechanism(),
+        "weighted_loss": WeightedLossMechanism(),  # default: exponential decay, half-life 20
+        "nba_321": NBAThreeTwoOneLottery(),
     }
     to_run = list(mechanisms.values()) if args.mechanism == "all" else [mechanisms[args.mechanism]]
     run_ids = []
@@ -222,7 +226,12 @@ def run_standard(args, db):
 
 def run_mixed(args, db):
     """Stability experiment: vary the number of rational agents from 0 to N_TEAMS."""
-    mech = {"nba": NBALottery(), "bilevel": BilevelMechanism(), "cola": COLAMechanism()}[args.mechanism]
+    mech = {
+        "nba": NBALottery(),
+        "bilevel": BilevelMechanism(),
+        "cola": COLAMechanism(),
+        "weighted_loss": WeightedLossMechanism(),
+    }[args.mechanism]
     run_ids = []
     for n_rat in args.mixed_sweep:
         label = f"{mech.name}_mixed_{n_rat}rational_{uuid.uuid4().hex[:6]}"
@@ -240,7 +249,12 @@ def run_mixed(args, db):
 
 def run_playoff_sweep(args, db):
     """Sensitivity: vary playoff_value, fixed mechanism."""
-    mech = {"nba": NBALottery(), "bilevel": BilevelMechanism(), "cola": COLAMechanism()}[args.mechanism]
+    mech = {
+        "nba": NBALottery(),
+        "bilevel": BilevelMechanism(),
+        "cola": COLAMechanism(),
+        "weighted_loss": WeightedLossMechanism(),
+    }[args.mechanism]
     run_ids = []
     for pv in args.playoff_values:
         label = f"{mech.name}_pv{int(pv)}_{uuid.uuid4().hex[:6]}"
@@ -265,7 +279,11 @@ def _print_header(mech: str, agent: str, seasons: int, extra: str = "") -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="NBA Tanking Simulation")
-    parser.add_argument("--mechanism", choices=["nba", "bilevel", "cola", "all"], default="all")
+    parser.add_argument(
+        "--mechanism",
+        choices=["nba", "bilevel", "cola", "weighted_loss", "nba_321", "all"],
+        default="all",
+    )
     parser.add_argument("--agent", choices=["rational", "honest", "llm", "mixed"], default="rational")
     parser.add_argument("--seasons", type=int, default=DEFAULT_SEASONS)
     parser.add_argument("--seed", type=int, default=42)
