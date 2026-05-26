@@ -32,6 +32,8 @@ _MODEL = "claude-haiku-4-5-20251001"
 
 def _system_prompt(ctx: DecisionContext) -> str:
     pick_preview = ", ".join(f"#{k}={int(v)}pts" for k, v in list(PICK_VALUES.items())[:8])
+    note = ctx.mechanism.llm_decision_note
+    mechanism_note = f"\n{note}\n" if note else ""
     return f"""You are managing an NBA team in a research simulation studying draft lottery incentives.
 
 GAME MODEL
@@ -68,6 +70,12 @@ far less than the {int(PLAYOFF_VALUE)}-pt playoff bonus. Even the best possible 
 guaranteed playoff berth. Only tank if your playoff probability is negligible (under ~15%) AND
 you are projected to finish among the league's worst 3-4 teams. When in doubt, compete.
 
+FAN ENGAGEMENT COST (qualitative)
+Tanking carries a real-world cost not captured in the point totals above: fans who perceive
+deliberate losing stop attending games and buying merchandise, which damages team revenue and
+brand reputation for years. This reputational harm makes casual tanking — reducing effort when
+you are only modestly out of playoff contention — almost never worthwhile in practice.
+{mechanism_note}
 RESPONSE FORMAT — return ONLY a raw JSON object, no markdown, no code fences, no explanation:
 {{"effort": <float 0.0–1.0>, "reasoning": "<one concise sentence>"}}"""
 
@@ -101,11 +109,10 @@ def _user_message(ctx: DecisionContext) -> str:
         )
     else:
         position_note = f"OUT of playoffs by {gap} spots"
-    lock_note = (
-        "\nNOTE: The lottery draft position is LOCKED for this season — tanking has zero benefit."
-        if not ctx.mechanism.rank_affects_lottery(ctx.games_completed, ctx.total_games)
-        else ""
-    )
+    if not ctx.mechanism.rank_affects_lottery(ctx.games_completed, ctx.total_games):
+        lock_note = "\nNOTE: This season's results no longer affect lottery draft position — tanking has zero benefit. Maximize wins."
+    else:
+        lock_note = ""
 
     # Convert schedule-game checkpoint interval to approximate per-team games.
     games_per_checkpoint = max(1, round(ctx.checkpoint_interval * 2 / len(ctx.standings)))

@@ -8,6 +8,7 @@
 \usepackage[margin=1in]{geometry}
 \usepackage{hyperref}
 \usepackage{xcolor}
+\usepackage{changepage}
 
 \definecolor{notecolor}{rgb}{0.5,0.5,0.5}
 \newcommand{\draftnote}[1]{\textit{\textcolor{notecolor}{[#1]}}}
@@ -106,12 +107,52 @@ endogenously, rather than following hardcoded rules.
 This approach lets us test how each mechanism performs against adaptive,
 strategically sophisticated agents rather than fixed behavioral assumptions.
 
+\begin{table}[h]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{p{3.2cm} p{4.2cm} p{5.0cm}}
+\toprule
+\textbf{Name} & \textbf{Proposer} & \textbf{Key Idea} \\
+\midrule
+Current NBA lottery &
+NBA (2019 reform) &
+Reverse-standings weights; top-3 each at 14\% \\
+Bilevel ranking &
+\citet{kazachkov2020} &
+Draft order locked at preset mid-season breakpoint \\
+COLA &
+\citet{highley2026} &
+Equal per-season tickets; persistent losers accumulate carryover advantage \\
+Weighted loss &
+This paper &
+Each loss counts, weighted by exponential decay; early losses matter more \\
+NBA ``3-2-1'' proposal &
+NBA (proposed) &
+Bottom~3 teams receive \emph{fewer} balls than the tier above them \\
+\bottomrule
+\end{tabular}
+\caption{Five mechanisms evaluated in this paper.}
+\label{tab:overview}
+\end{table}
+
+To evaluate these mechanisms empirically we build a large-scale multi-agent
+simulation: 30 teams, 82 games per season, 50 seasons per run, producing
+over 123{,}000 game outcomes and 12{,}000 agent decisions per experimental
+condition.
+Two agent types provide complementary perspectives: a \emph{rational agent}
+that maximizes expected utility analytically via normal-approximation
+probability estimates, and an \emph{LLM agent} powered by
+\texttt{claude-haiku-4-5} that reasons qualitatively about the same
+decision.
+Running both types across all five mechanisms yields a dataset rich enough
+to test each mechanism's theoretical properties against adaptive strategic
+behavior.
+
 % ============================================================
 %  Section 2: Introduction & Background
 % ============================================================
 
 \section{Introduction \& Background}
-\draftnote{Primary author: Kartik. Draft due May 13.}
 
 The NBA is a league consisting of 30 teams, 16 of which make the playoffs each
 year.
@@ -127,7 +168,7 @@ NBA:
 \begin{itemize}
     \item \textbf{1985:} All 7 non-playoff teams had identical odds at the
     \#1 pick. There is a conspiracy theory surrounding this first lottery
-    called the ``frozen envelope'' theory---that Commissioner David Stern, a
+    called the ``frozen envelope'' theory: that Commissioner David Stern, a
     New Yorker, had frozen the NY Knicks envelope so that he would recognize
     it and ensure they selected future Hall of Famer Patrick Ewing.
     \item \textbf{1990:} Weighted the odds by reverse standings for the first
@@ -142,7 +183,7 @@ NBA:
 Tanking is a phenomenon that \citet{taylor2002} and later \citet{schmidt2024}
 both quantify and confirm.
 Their analyses use regression to show the explanatory power of playoff
-elimination on win rates---teams eliminated from playoff contention win at
+elimination on win rates: teams eliminated from playoff contention win at
 significantly lower rates than otherwise expected.
 Sam Hinkie, GM of the 2013--2016 Philadelphia 76ers, famously coined the
 phrase ``The Process'' as his strategy of three consecutive seasons of
@@ -179,7 +220,7 @@ for the 13th, and 0.0\% for the 14th.
 
 The lottery has been redesigned several times since its introduction in 1985.
 In its original form, all non-playoff teams had equal odds at the first
-overall pick---a design that notoriously invited abuse and spawned the
+overall pick, a design that notoriously invited abuse and spawned the
 ``frozen envelope'' conspiracy theory surrounding the Knicks' selection of
 Patrick Ewing.
 The 1990 reform introduced weighted odds based on reverse standings, giving
@@ -195,8 +236,8 @@ eliminating it.
 
 The empirical literature establishes that tanking is not merely a theoretical
 concern but a behavioral reality.
-\citet{taylor2002} exploit two lottery-regime changes---the equal-odds lottery
-introduced in 1984--85 and the weighted lottery in 1990---to estimate the
+\citet{taylor2002} exploit two lottery-regime changes (the equal-odds lottery
+introduced in 1984--85 and the weighted lottery in 1990) to estimate the
 causal effect of playoff elimination on team win rates.
 Controlling for team quality, eliminated teams were 2.5 times as likely to
 lose as predicted in 1983--84, 1.3 times in the equal-odds 1984--85 season,
@@ -236,7 +277,7 @@ The proof is by contradiction: if the mechanism is not flat and respects
 standings, there always exists a position at which losing improves expected
 pick quality by more than it costs in playoff probability.
 Crucially, this impossibility holds regardless of how the weighting is
-calibrated---it is a structural property of end-of-season ranking systems,
+calibrated; it is a structural property of end-of-season ranking systems,
 not a consequence of any specific parameter choice.
 
 The implications are important for mechanism design.
@@ -245,8 +286,8 @@ either abandoning the standings-based ranking structure entirely or treating
 all lottery teams equally (which would destroy redistributive efficiency,
 since top picks would go to teams at random rather than to the weakest
 franchises).
-The reform proposals we study---bilevel ranking, COLA, weighted loss, and the
-NBA's 3-2-1 proposal---each address this constraint in a different way, which
+The reform proposals we study (bilevel ranking, COLA, weighted loss, and the
+NBA's 3-2-1 proposal) each address this constraint in a different way, which
 is what makes comparing them informative.
 
 % ============================================================
@@ -347,448 +388,18 @@ Inverts extreme tanking incentive; Tier~A floor at pick~12 \\
 
 \section{Literature Review}
 
-\draftnote{Primary synthesis author: Kartik. Individual paper notes provided
-below. The cross-paper synthesis---comparing, contrasting, and critiquing
-across papers---is where the AGT contribution lives and should be written
-after all individual sections are drafted.}
-
-\subsection{\citet{banchio2020}: ``A No-Tanking Draft Allocation Policy''}
-
-\textbf{In one sentence:} This paper identifies that since any end-of-year
-ranking system will create perverse incentives, the NBA should only account
-for games up to the point at which a team first has an incentive to tank.
-
-\subsubsection*{Setting \& Model}
-\begin{itemize}
-    \item Teams are the agents, each choosing an effort level that affects
-    their probability of winning individual games and, ultimately, their
-    end-of-season rank.
-    \item The season is modeled as a sequence of pairwise games; team effort
-    translates to win probability through a parameter $\alpha$.
-    \item The league is modeled as a central planner whose objective is to
-    maximize the probability that the first draft pick is assigned to the
-    worst team, subject to the constraint that no team has an incentive to
-    tank at any point in the season.
-    \item The proposed mechanism updates lottery probabilities dynamically
-    after each game, setting each team's probability to match its current
-    likelihood of finishing last given the season history so far.
-    \item This adjustment process is terminated before continuing it would
-    violate incentive-compatibility for any team---meaning the cutoff is
-    endogenous to the season's trajectory, not fixed in advance.
-\end{itemize}
-
-\subsubsection*{Main Results}
-\begin{itemize}
-    \item \textbf{Impossibility (Theorem 1):} Any redistributive policy that
-    relies on final standings alone to allocate draft picks will give some team
-    an incentive to lose in some possible season history. Proved by
-    contradiction. This is the key negative result motivating the whole
-    literature.
-    \item \textbf{Positive result:} Their dynamic mechanism sidesteps the
-    impossibility by locking in lottery probabilities mid-season, before
-    tanking becomes rational. It is approximately optimal among all
-    incentive-compatible rules that operate on the same restricted set of games.
-    \item The mechanism does not guarantee the best player goes to the worst
-    team, but approximates it far better than a flat uniform lottery would.
-\end{itemize}
-
-\subsubsection*{Proof Techniques / Methodology}
-\begin{itemize}
-    \item Theorem 1: proof by contradiction.
-    \item Simulation of a single season at a time to identify the cutoff point.
-    \item Retroactively applied to the 1987 and 1989 NBA seasons---smart
-    because flat lottery odds in those seasons means the data is not
-    contaminated by teams already behaving strategically.
-\end{itemize}
-
-\subsubsection*{Relation to Our Project}
-\begin{itemize}
-    \item Their model setup is very robust; we implement a simplified version.
-    \item We adopt their framework for a value from the draft $D$ and a value
-    from making the playoffs $V$.
-    \item We do not use their $\alpha$ parameter for effort; instead we use an
-    effort floor model in which teams cannot perfectly throw a game even at
-    minimum effort.
-\end{itemize}
-
-\subsubsection*{Connections to Other Papers}
-\begin{itemize}
-    \item The impossibility result (Theorem 1) is the direct theoretical
-    foundation for both \citet{kazachkov2020} and \citet{highley2026}---both
-    papers respond by designing mechanisms that do not rely on final standings.
-    \item Banchio \& Munro explicitly discuss and distinguish their proposal
-    from Gold (2010) and \citet{lenten2016}; they argue neither fully resolves
-    the incentive problem.
-    \item Agrees with \citet{taylor2002} that tanking is a real, documented
-    phenomenon, not just a theoretical concern.
-\end{itemize}
-
-\subsubsection*{Critiques / Open Questions}
-\begin{itemize}
-    \item To calculate when draft odds should be locked in, the league must
-    know both $D$ and $V$ for each team---in practice these are unobservable
-    and likely heterogeneous across franchises.
-    \item The game at which draft order is set is not transparent or
-    predictable in advance, which creates fan engagement and trust problems.
-    \item Ignores game outcomes from the latter part of the season entirely,
-    which may reduce competitive effort even absent intentional tanking---teams
-    whose position is locked in may rest healthy players to avoid injury.
-    \item No incentive for teams to continue playing hard after the cutoff
-    point is reached.
-\end{itemize}
-
-\subsection{\citet{kazachkov2020}: ``On Tanking and Competitive Balance''}
-
-\textbf{In one sentence:} This paper introduces a bilevel ranking mechanism
-that determines non-playoff draft order by standings at a mid-season
-breakpoint rather than end of season, proving it both reduces tanking and can
-improve competitive balance relative to the current NBA system.
-
-\subsubsection*{Setting \& Model}
-\begin{itemize}
-    \item A stylized sports league with $n$ teams, each with a true (latent)
-    quality level the league cannot directly observe.
-    \item Teams choose whether to exert full effort or tank in each game;
-    observed standings are a signal of true quality that is distorted when
-    teams tank.
-    \item Two belief models: an optimistic model (a tanking team always
-    benefits) and a conservative model (gains depend on other teams'
-    behavior)---the dominant strategy result holds under both.
-    \item Two evaluation metrics: tanking rate and competitive balance,
-    measured by Kendall tau distance between the final draft ordering and the
-    true quality ranking.
-    \item The bilevel mechanism ranks non-playoff teams by standings at a
-    preset mid-season breakpoint; once the breakpoint passes, draft position
-    is locked in.
-\end{itemize}
-
-\subsubsection*{Main Results}
-\begin{itemize}
-    \item Under the current NBA system, tanking is a dominant strategy for
-    any team effectively eliminated from playoff contention, proved under both
-    belief models.
-    \item Under the bilevel mechanism, no team has an incentive to tank in any
-    game after the breakpoint has passed.
-    \item Simulation results show the bilevel ranking reduces tanked games by
-    57--72\% compared to the current NBA system, depending on breakpoint
-    placement.
-    \item Counterintuitively, the bilevel mechanism can also improve
-    competitive balance relative to the current system: late-season tanking
-    distorts standings; eliminating it produces a draft ordering that better
-    reflects which teams genuinely need help.
-    \item The optimal breakpoint falls between 5/6 and 7/8 of the way through
-    the season.
-\end{itemize}
-
-\subsubsection*{Proof Techniques / Methodology}
-\begin{itemize}
-    \item Formal game-theoretic analysis to establish dominance results under
-    both belief models.
-    \item Closed-form characterization of team tanking strategies under
-    bilevel ranking.
-    \item Monte Carlo simulation of full league seasons with teams playing
-    fixed strategies.
-    \item Kendall tau distance used throughout as the competitive balance
-    metric---borrowed directly for our simulation.
-\end{itemize}
-
-\subsubsection*{Relation to Our Project}
-\begin{itemize}
-    \item The bilevel ranking is Condition D in our experimental design.
-    \item We borrow their Kendall tau distance metric as our primary measure
-    of competitive balance.
-    \item Our simulation tests whether their 57--72\% tanking reduction holds
-    when agents are adaptive rather than rule-based---this is our main
-    extension of their work.
-\end{itemize}
-
-\subsubsection*{Connections to Other Papers}
-\begin{itemize}
-    \item Accepts the \citet{banchio2020} impossibility result as its starting
-    point; the bilevel mechanism circumvents it by not relying on final
-    standings.
-    \item Outperforms the \citet{lenten2016} elimination-based ordering in
-    direct simulations.
-    \item \citet{highley2026} takes a more structural approach to the same
-    problem; bilevel ranking keeps the single-season structure while COLA
-    introduces multi-year carryover.
-\end{itemize}
-
-\subsubsection*{Critiques / Open Questions}
-\begin{itemize}
-    \item The breakpoint must be chosen in advance; the paper does not provide
-    a principled method for determining the optimal breakpoint, which likely
-    varies by season.
-    \item Teams could tank strategically before the breakpoint to position
-    themselves favorably---the mechanism eliminates post-breakpoint incentives
-    but not pre-breakpoint ones.
-    \item The model treats team quality as fixed; mid-season trades complicate
-    the breakpoint calculation in practice.
-    \item Their simulations use rule-based agents with fixed strategies---our
-    LLM-based simulation directly addresses this limitation.
-\end{itemize}
-
-\subsection{\citet{highley2026}: ``Carry-Over Lottery Allocation''}
-
-\textbf{In one sentence:} COLA achieves full incentive compatibility by giving
-every non-playoff team the same number of lottery tickets each season
-regardless of record, while still favoring persistently weak teams through
-ticket carryover across seasons.
-
-\subsubsection*{Setting \& Model}
-\begin{itemize}
-    \item Multi-season model; teams accumulate a stockpile of lottery tickets
-    over time.
-    \item Each season, every non-playoff team receives the same fixed number
-    of new tickets regardless of win-loss record---the core design choice that
-    eliminates the in-season tanking incentive.
-    \item Tickets carry over into future lotteries; playoff success and winning
-    a top pick reduce a team's stockpile.
-    \item Classic COLA is the primary proposal; Diet COLA is a simplified
-    variant used for formal proofs.
-    \item Special case: in years with an exceptionally strong draft class,
-    some playoff teams might prefer lottery access over their playoff spot.
-    The paper handles this via a Bayesian Truth Serum-based media survey to
-    identify such years, expanding lottery eligibility to maintain
-    incentive-compatibility.
-\end{itemize}
-
-\subsubsection*{Main Results}
-\begin{itemize}
-    \item Classic COLA eliminates the in-season tanking incentive entirely:
-    ticket allocation does not depend on record.
-    \item The carryover structure preserves the competitive balance function
-    of the draft---teams that repeatedly miss the playoffs accumulate more
-    tickets and are more likely to land top picks over time.
-    \item Diet COLA is formally proved incentive-compatible under the
-    assumption that reaching the playoffs is always preferred to lottery
-    access.
-    \item The Bayesian Truth Serum mechanism for identifying strong draft
-    classes is a notable methodological contribution in its own right.
-    \item Practical implementation challenges addressed: transitioning from
-    the current system, handling traded picks (excluded from lottery
-    eligibility), managing varying draft class strength.
-\end{itemize}
-
-\subsubsection*{Proof Techniques / Methodology}
-\begin{itemize}
-    \item Formal proof of incentive-compatibility for Diet COLA under stated
-    preference assumptions.
-    \item Mechanism design analysis for the strong draft class extension using
-    Bayesian Truth Serum.
-    \item Qualitative analysis of implementation challenges and practical
-    feasibility.
-\end{itemize}
-
-\subsubsection*{Relation to Our Project}
-\begin{itemize}
-    \item COLA is Condition E in our experimental design.
-    \item Our primary contribution relative to this paper is testing whether
-    the IC guarantee holds when agents are adaptive rather than idealized
-    rational agents.
-    \item The multi-year ticket accumulation mechanic presents a design
-    challenge for our single-season simulation; we run multi-season simulations
-    to let ticket stockpiles develop endogenously.
-\end{itemize}
-
-\subsubsection*{Connections to Other Papers}
-\begin{itemize}
-    \item Accepts the \citet{banchio2020} impossibility result as foundational
-    motivation; COLA's response is the most structurally radical---it abandons
-    standings as the basis for ticket allocation entirely.
-    \item Makes a stronger IC guarantee than \citet{kazachkov2020} (full IC
-    rather than partial reduction) but requires multi-year infrastructure that
-    bilevel ranking does not.
-    \item Both COLA and bilevel ranking favor simpler, more transparent rules
-    over the dynamic adjustment approach of \citet{banchio2020}.
-\end{itemize}
-
-\subsubsection*{Critiques / Open Questions}
-\begin{itemize}
-    \item Multi-year ticket carryover introduces significant administrative
-    complexity for teams, fans, and analysts.
-    \item The Bayesian Truth Serum mechanism may itself be manipulable if
-    media respondents have team affiliations or financial incentives.
-    \item The IC proof depends on the assumption that all teams always prefer
-    playoff access to lottery access outside of specially-handled strong-class
-    years; if this assumption fails more broadly, the IC guarantee weakens.
-    \item Excluding traded picks from lottery eligibility creates a two-tier
-    system that could distort the trade market in unmodeled ways.
-\end{itemize}
-
-\subsection{\citet{taylor2002}: ``Losing to Win''}
-
-\draftnote{Primary author: Kartik. Use narrowly to establish that tanking
-incentives produce real behavior. Do not let it drive the paper's framing.
-This is AGT, not sports economics.}
-
-\textbf{In one sentence:} An early empirical paper that quantified tanking
-by exploiting two lottery-regime changes to show that eliminated teams' win
-rates correlate strongly with the incentive structure of the active lottery.
-
-\subsubsection*{Setting \& Model}
-\begin{itemize}
-    \item Three NBA seasons: 1983--84 (pre-lottery), 1984--85 (equal-odds
-    lottery), and 1990 (weighted lottery). Each observation is a single
-    regular-season game.
-    \item Response variable: binary win/loss.
-    \item Key question: controlling for team quality, do playoff-eliminated
-    teams lose more, and does the effect differ significantly across lottery
-    regimes?
-\end{itemize}
-
-\subsubsection*{Main Results}
-\begin{itemize}
-    \item 1983--84: eliminated teams 2.5$\times$ as likely to lose vs.
-    expected from team quality.
-    \item 1984--85: flattened odds reduce the effect to 1.3$\times$.
-    \item 1990: eliminated teams 2.2$\times$ as likely to lose.
-    \item Lottery structure significantly impacts the propensity of eliminated
-    teams to lose.
-\end{itemize}
-
-\subsubsection*{Proof Techniques / Methodology}
-\begin{itemize}
-    \item Empirical logit regression; econometric rather than
-    mechanism-design or game-theoretic.
-\end{itemize}
-
-\subsubsection*{Relation to Our Project}
-\begin{itemize}
-    \item Provides compelling evidence that tanking is a real effect driven
-    by incentives, not just a theoretical concern. Seminal paper in the
-    literature.
-\end{itemize}
-
-\subsubsection*{Critiques / Open Questions}
-\begin{itemize}
-    \item Limited sample size of 3 seasons; particularly constrained for the
-    equal-odds regime (1 season only).
-    \item Game outcomes do not necessarily capture fan utility---fans may value
-    effort and star-player appearances regardless of wins.
-    \item Likely underestimates modern tanking given how analytically
-    sophisticated front offices have become in the 24 years since publication.
-\end{itemize}
-
-\subsection{\citet{schmidt2024}: ``On the Incentive Structure of Tournaments''}
-
-\draftnote{Primary author: Kartik. Same caveat as Taylor \& Trogdon---
-empirical background only.}
-
-\textbf{In one sentence:} A successor to \citet{taylor2002} that uses modern
-portfolio theory to show that the NBA's 2019 flattening of top-pick odds led
-to a measurable decline in asset deployment quality among lottery-contending
-teams, with effects disappearing after the reform.
-
-\subsubsection*{Setting \& Model}
-\begin{itemize}
-    \item Two NBA seasons: 2017--18 (pre-reform) and 2018--19 (post-reform).
-    The split is the flattening of \#1 pick odds from 25\%/19.9\%/15.6\% to
-    14\% flat for the three worst teams.
-    \item Frames lineup decisions as an asset allocation problem; measures
-    the ``return differential'' between realized and theoretically optimal
-    player deployment for lottery-contending teams.
-\end{itemize}
-
-\subsubsection*{Main Results}
-\begin{itemize}
-    \item 2017--18: measurably more likely that lottery-contending teams would
-    underperform their optimal lineup allocation.
-    \item 2018--19: effect disappears after odds are flattened.
-    \item Interesting home/away split: the effect is much larger on the road,
-    suggesting teams are reluctant to tank visibly in front of home fans.
-\end{itemize}
-
-\subsubsection*{Proof Techniques / Methodology}
-\begin{itemize}
-    \item Modern portfolio theory to construct an efficient frontier of player
-    allocations per game; regression on the deviation between realized and
-    theoretical return.
-\end{itemize}
-
-\subsubsection*{Relation to Our Project}
-\begin{itemize}
-    \item Provides additional evidence that tanking is incentive-driven.
-    The 2019 reform is the most recent real-world data point directly
-    relevant to our simulation's current-NBA baseline.
-\end{itemize}
-
-\subsubsection*{Critiques / Open Questions}
-\begin{itemize}
-    \item Limited sample size of 2 seasons.
-    \item Neither this paper nor \citet{taylor2002} captures the effect of
-    incoming draft class strength---teams may tank more in generational draft
-    years, which is left unmodeled.
-\end{itemize}
-
-\subsection{\citet{lenten2016}: ``Mitigation of Perverse Incentives in
-Professional Sports Leagues''}
-
-\draftnote{Primary author: Kartik. Broader comparative context across sports;
-useful for framing our mechanisms within a wider design space.}
-
-\textbf{In one sentence:} Proposes assigning draft picks by order of playoff
-elimination, arguing this locks in draft position before teams have incentive
-to lose.
-
-\subsubsection*{Setting \& Model}
-\begin{itemize}
-    \item Frames reverse-order drafts as an industrial/organizational problem.
-    \item Claims: once a team is eliminated, its draft position is locked in,
-    removing post-elimination incentive to lose.
-    \item MLB and NBA seasons from 2005--2013; Monte Carlo simulations to
-    estimate elimination timing.
-\end{itemize}
-
-\subsubsection*{Main Results}
-\begin{itemize}
-    \item Controlling for other factors, teams play meaningfully better in
-    the post-elimination window than the pre-elimination window, holding
-    across both NBA and MLB.
-\end{itemize}
-
-\subsubsection*{Proof Techniques / Methodology}
-\begin{itemize}
-    \item Monte Carlo simulation of remaining-schedule outcomes to estimate
-    each team's elimination date.
-    \item Regression of game outcomes on pre- vs.\ post-elimination behavior.
-\end{itemize}
-
-\subsubsection*{Relation to Our Project}
-\begin{itemize}
-    \item Provides a unique mechanism idea empirically validated within the
-    paper; findings reinforce our project's core motivation that incentive
-    changes produce behavioral changes.
-\end{itemize}
-
-\subsubsection*{Connections to Other Papers}
-\begin{itemize}
-    \item \citet{banchio2020} argue that the incentive is not eliminated but
-    merely pushed forward to the pre-elimination window, creating a race to
-    elimination rather than a race to the bottom.
-\end{itemize}
-
-\subsubsection*{Critiques / Open Questions}
-\begin{itemize}
-    \item \citet{banchio2020} are most likely correct---pushing incentives
-    earlier may be worse, not better.
-    \item Comparing NBA and MLB is structurally awkward; NHL or WNBA would be
-    a more apt comparison given similar league structures.
-\end{itemize}
-
-\subsection{Cross-Paper Synthesis}
-
-The three core mechanism design papers---\citet{banchio2020},
-\citet{kazachkov2020}, and \citet{highley2026}---broadly agree that tanking
+The three core mechanism design papers (\citet{banchio2020},
+\citet{kazachkov2020}, and \citet{highley2026}) broadly agree that tanking
 is a real, incentive-driven phenomenon rather than a moral failing within
 front offices.
 All three also agree that while eliminating tanking should be an objective,
 redistributing talent effectively and maintaining competitive parity must
-remain co-equal goals---which is why none of the papers recommends a flat
+remain co-equal goals, which is why none of the papers recommends a flat
 uniform lottery, even though flat odds would eliminate tanking incentives
 entirely.
 This common starting point conceals important disagreements about what kind
 of solution is feasible and what costs are acceptable.
+Detailed summaries of each paper appear in Appendix~\ref{app:paper_summaries}.
 
 \paragraph{Strategies for circumventing the impossibility.}
 Each mechanism responds to the \citet{banchio2020} impossibility in a
@@ -803,15 +414,15 @@ transparency and predictability.
 standings as the allocation basis entirely, substituting a multi-year ticket
 accumulation rule that is equally weighted within each season.
 The NBA's own proposed redesign and our weighted-loss mechanism occupy a middle
-ground---they keep an end-of-season allocation basis but alter the reward
+ground: they keep an end-of-season allocation basis but alter the reward
 structure to penalize extreme tanking rather than reward it.
 
 \paragraph{Transparency versus optimality.}
 \citet{banchio2020}'s mechanism is theoretically elegant but practically
 opaque: neither fans nor teams can know in advance when standings will be
 locked, because the cutoff is endogenous to the season's trajectory.
-This creates a verification problem---teams and fans cannot audit whether the
-cutoff was applied correctly---and creates perverse late-season incentives
+This creates a verification problem: teams and fans cannot audit whether the
+cutoff was applied correctly, and creates perverse late-season incentives
 for teams whose standings have already been locked in to rest healthy players
 to avoid injury without penalty.
 The bilevel ranking \citep{kazachkov2020} restores transparency at the cost
@@ -830,8 +441,8 @@ our simulation design.
 First, none of the papers accounts for variation in incoming draft class
 strength.
 Tanking is widely understood to be much more prevalent in generational draft
-years---the 76ers' ``Process'' was explicitly timed around the 2016 class
-that produced Ben Simmons---but the formal models treat all draft picks as
+years (the 76ers' ``Process'' was explicitly timed around the 2016 class
+that produced Ben Simmons), but the formal models treat all draft picks as
 having fixed values.
 Second, none of the papers incorporates the trade deadline, a major
 strategic inflection point at which teams publicly declare whether they are
@@ -855,14 +466,15 @@ three distinct lottery regimes.
 \citet{schmidt2024} document a behavioral response to the 2019 reform
 consistent with the theoretical prediction that flattening odds at the top
 displaces rather than eliminates tanking.
-The mechanism design papers' central claims---that incentives drive behavior
-and that structural changes produce predictable behavioral responses---are
+The mechanism design papers' central claims (that incentives drive behavior
+and that structural changes produce predictable behavioral responses) are
 thus grounded in two decades of empirical evidence, not just theoretical
 possibility.
 Our simulation contributes a middle layer between formal theory and real-world
 data: a controlled environment in which mechanisms and agent behavior can be
 varied independently, allowing us to isolate which design features drive
 tanking reduction.
+
 
 % ============================================================
 %  Section 5: Simulation Design
@@ -886,7 +498,7 @@ The second is an \emph{LLM agent} in which the team is represented by
 prompt describing the game state and reward structure and returns a continuous
 effort level together with its reasoning.
 This lets us test whether the theoretical properties of each mechanism survive
-contact with adaptive, strategically sophisticated agents---a more demanding
+contact with adaptive, strategically sophisticated agents, a more demanding
 standard than the rule-based simulations used in prior work
 \citep{kazachkov2020, highley2026}.
 
@@ -937,7 +549,7 @@ The chosen effort level is held constant until the next checkpoint.
 
 \paragraph{Payoffs.}
 Making the playoffs yields a value of $V = 200$, calibrated so that a playoff
-berth substantially dominates any expected lottery outcome---consistent with
+berth substantially dominates any expected lottery outcome, consistent with
 the empirical evidence that postseason revenue, visibility, and long-run
 competitive stature far exceed the expected value of even a top lottery pick
 \citep{taylor2002}.
@@ -964,8 +576,15 @@ replacement; picks 5--14 are awarded in reverse-standings order.
 Under COLA, draft order is determined entirely by accumulated ticket counts.
 The weighted-loss mechanism orders teams by cumulative loss score
 $s_i = \sum_{t} w(t) \cdot \mathbf{1}[\text{team $i$ loses game $t$}]$,
-where $w(t) = 2^{-t/20}$ decays with a half-life of 20 games, so early-season
-losses carry more weight.
+where $w(t) = 2^{-t/20}$ decays exponentially with a half-life of 20
+per-team games.
+Concretely: a loss in game~1 carries weight $\approx 0.97$; a game-20 loss
+carries weight $0.50$ (one half-life); a game-41 loss carries $0.25$; and
+a game-82 loss carries only $\approx 0.06$.
+A team that tanks early in the season therefore accumulates a loss-score
+roughly 17 times larger per game than a team that tanks in the final week,
+creating a continuous incentive to compete late in the season even for
+lottery-bound teams.
 The NBA ``3-2-1'' proposal allocates 2 balls to each of the three worst-record
 teams (Tier~A) and 3 balls to each of the remaining lottery teams (Tier~B),
 then draws all 14 picks sequentially; Tier~A teams are guaranteed no worse
@@ -1017,8 +636,8 @@ agent} that maximizes expected utility analytically.
 At each checkpoint, the rational agent evaluates expected utility over the
 discrete effort grid using a pre-computed Monte Carlo expected-value table
 (5{,}000 lottery simulations).
-Expected pick values under COLA are uniform across all lottery ranks---the
-mechanism's key incentive-compatibility property---so rational agents under
+Expected pick values under COLA are uniform across all lottery ranks (the
+mechanism's key incentive-compatibility property), so rational agents under
 COLA find no benefit to tanking within a season.
 The rational agent provides a reproducible baseline for the systematic
 experiments in Section~\ref{sec:conditions}; the LLM agent validates whether
@@ -1049,10 +668,11 @@ while keeping all agents rational.
 Each condition also has a paired honest-agent baseline (all 30 teams exert
 full effort) that isolates mechanism effects from strategic behavior.
 
+\begin{adjustwidth}{-0.5in}{0in}
 \begin{table}[h]
 \centering
 \renewcommand{\arraystretch}{1.3}
-\begin{tabular}{cllp{5.2cm}}
+\begin{tabular}{cllp{5.6cm}}
 \toprule
 \textbf{Cond.} & \textbf{Mechanism} & \textbf{Agent Type} & \textbf{Purpose} \\
 \midrule
@@ -1076,6 +696,7 @@ G & NBA ``3-2-1'' proposal & All rational
 utility analytically; ``honest'' agents always exert full effort ($e = 1$).}
 \label{tab:conditions}
 \end{table}
+\end{adjustwidth}
 
 Each condition is run for $S = 50$ seasons.
 In Condition~B (and in the mixed-population sweep), rational agents are
@@ -1086,7 +707,7 @@ is not an interesting test of the tanking incentive, because it will finish in
 the lottery with or without intentional effort reduction.
 The more demanding test is whether a team that is genuinely competitive for a
 playoff spot chooses to forgo that competition in favor of a better draft
-position---exactly the tradeoff that the Banchio impossibility result predicts
+position, exactly the tradeoff that the Banchio impossibility result predicts
 will exist for some team under any non-flat end-of-season mechanism.
 By assigning rationality to stronger teams, we test the mechanism's ability
 to suppress tanking precisely where the incentive is most finely balanced
@@ -1119,6 +740,14 @@ $K \in [0,1]$, with $K = 0$ indicating perfect agreement.
 We compute $K$ using $(\alpha_i^t)$ at the \emph{start} of each season,
 recorded in the \texttt{skill\_history} table.
 
+As a concrete example: if a mid-tier team (true skill rank~12) successfully
+tanks to a standings rank of~26 while a genuinely weak team (true skill
+rank~26) competes honestly and finishes at standings rank~12, every pair
+(weak team, tanker) constitutes a discordant pair counted by $K$.
+With 30 teams, each such swap increases $K$ by $1/\binom{30}{2} \approx
+0.0023$, so a handful of successful tankers can meaningfully shift the
+aggregate tau distance.
+
 We choose the comparison against \emph{true skill} rather than an alternative
 balance metric (e.g., Gini coefficient or HHI on win totals) for two reasons.
 First, our simulation has a ground truth: each team's latent skill
@@ -1133,8 +762,8 @@ Second, tau is directly connected to the draft's redistributive purpose.
 If the worst teams finish last, they receive the top picks, which is what
 the draft is designed to achieve; low tau means the draft is working as
 intended.
-If tanking distorts standings---for instance, a mid-tier team tanks into
-the lottery while a genuinely weak team fights to stay competitive---tau
+If tanking distorts standings (for instance, a mid-tier team tanks into
+the lottery while a genuinely weak team fights to stay competitive), tau
 increases, signaling that top picks are being misdirected away from the teams
 that most need them.
 
@@ -1220,11 +849,11 @@ Both bilevel ranking and COLA confirm their theoretical anti-tanking
 properties against adaptive rational agents, though neither reaches exactly
 zero.
 Bilevel's 3.0\% residual reflects rational agents who identify pre-breakpoint
-tanking as optimal before standings lock at game~70---the mechanism eliminates
+tanking as optimal before standings lock at game~70; the mechanism eliminates
 \emph{post}-breakpoint tanking incentives but not pre-breakpoint ones.
 COLA's 0.5\% residual arises in edge cases where accumulated ticket
 differentials create ambiguous lottery ranking; the core incentive-compatibility
-property---that within-season record does not affect lottery odds---holds in
+property (that within-season record does not affect lottery odds) holds in
 nearly all decision contexts.
 Both mechanisms substantially outperform the NBA lottery baseline, confirming
 that each mechanism's theoretical anti-tanking guarantee survives contact with
@@ -1254,10 +883,21 @@ Notably, the NBA 3-2-1 proposal produces the best draft efficiency for the
 weakest skill quartile of lottery teams, with an average pick of 6.57,
 followed by bilevel (6.85), weighted loss (6.92), COLA (7.21), and the
 current NBA lottery (7.52).
-The 3-2-1 mechanism's inversion of Tier~A incentives---giving the three worst
-teams \emph{fewer} lottery balls---reduces the extreme concentration of bad
-outcomes at the very bottom of the lottery, effectively spreading pick quality
-more evenly across the weakest teams.
+This result is counterintuitive: how does giving the worst teams \emph{fewer}
+lottery balls improve their average draft pick?
+The mechanism works by reducing strategic competition at the very bottom.
+Under the current lottery, middle-tier rational agents tank specifically to
+reach the bottom three positions, because doing so maximizes their ticket
+count.
+Under 3-2-1, finishing in the bottom three means 2 balls rather than 3,
+so the incentive reverses: teams try to avoid the Tier~A basement.
+The result is that the genuinely weakest teams (those in Tier~A not by
+strategic choice but by actual roster deficiency) face less competition from
+tactical tankers.
+Their average pick improves not because they receive more balls, but because
+fewer strong-but-tanking teams crowd the Tier~A pool.
+The Tier~A guarantee of no worse than pick~12 provides a floor that further
+insulates truly weak teams from the worst lottery outcomes.
 
 The weighted-loss mechanism produces a tau distance of 0.396 under rational
 play, matching its honest baseline of 0.406 closely despite 2.3\% tanking.
@@ -1286,22 +926,31 @@ rational agents increases, under the current NBA lottery (50 seasons).}
 \label{tab:mixed}
 \end{table}
 
-\paragraph{Conjecture 1: partially supported.}
-A single rational agent does produce positive aggregate tanking (0.2\%), but
-the effect is small and does not cascade into widespread defection.
-Honest agents in our simulation exert full effort by construction, so the
-``contagion'' effect requires rational agents to hold a share large enough
-that the benefit of tanking outweighs the cost.
-The relationship between rational-agent share and tanking rate is
-approximately linear: each additional rational agent contributes roughly
-0.2 percentage points to the aggregate tanking rate, with the all-rational
-equilibrium (6.9\%) at the upper end.
+\paragraph{Conjecture 1: partially supported, with an important clarification.}
+A single rational agent does produce positive aggregate tanking (0.2\%),
+confirming that the incentive to tank exists and is acted on even in isolation.
+However, the cascade effect the conjecture anticipated (that one defection
+induces others) cannot occur by construction in our model.
+Honest agents exert full effort unconditionally; they are behavioral types,
+not strategic ones.
+They do not observe their peers' effort choices and have no mechanism by which
+another team's tanking could shift their own best response.
+The conjecture implicitly assumed honest agents would be strategic actors in a
+cooperation norm, where seeing a defection makes defection more attractive.
+Our honest agents are better understood as a conservative behavioral baseline.
 
-This result qualifies Conjecture~1: the honest equilibrium is not fragile in
-the sense of unraveling at the first defection, but it is unstable in the
-sense that tanking scales predictably with the proportion of strategic actors.
-Any front office willing to optimize against the incentive structure can
-extract value from the lottery; the question is how many are willing to do so.
+What the mixed-population sweep does test is a different and arguably more
+policy-relevant question: what happens as the fraction of strategically
+sophisticated front offices grows?
+The answer is approximately linear: each additional rational agent contributes
+roughly 0.2 percentage points to the aggregate tanking rate, with no evidence
+of a tipping point or nonlinear escalation.
+The honest equilibrium is not fragile in the sense of unraveling at the first
+defection, but tanking scales predictably with the proportion of strategic
+actors.
+In a real league where front offices grow more analytically sophisticated over
+time, this relationship suggests tanking rates will increase gradually rather
+than suddenly.
 
 \subsection{Playoff Value Sensitivity}
 
@@ -1343,7 +992,7 @@ rationally tank for improved lottery position.
 With high playoff value ($V = 200$), tanking is concentrated \emph{far below}
 the playoff cutoff, not near it.
 Among all tanking decisions in the all-rational NBA lottery run, 76\% come
-from teams ranked 21st or worse---comfortably in the lottery tier---rather
+from teams ranked 21st or worse (comfortably in the lottery tier) rather
 than from teams near the playoff boundary.
 Teams near the bubble (ranks 13--20) account for only 16\% of tanking
 decisions, as the large playoff bonus keeps bubble teams competing.
@@ -1359,7 +1008,7 @@ playoff boundary.
 We ran 10 seasons of the current NBA lottery with all 30 teams represented
 by \texttt{claude-haiku-4-5}, using the same payoff parameters as the
 rational-agent baseline ($V = 200$).
-The LLM agents tank at an average rate of \textbf{13.2\%}---nearly twice
+The LLM agents tank at an average rate of \textbf{13.2\%}, nearly twice
 the rational-agent rate of 6.9\% under the same mechanism.
 
 The reasoning traces explain the discrepancy.
@@ -1432,7 +1081,7 @@ tanking reduction and redistributive efficiency:
     target it.
     This mechanism also produces the best draft efficiency for the weakest
     skill quartile (mean pick 6.57), a surprising result given that it gives
-    Tier~A teams fewer lottery balls---the reduced randomness at the extremes
+    Tier~A teams fewer lottery balls; the reduced randomness at the extremes
     improves average outcomes for genuinely weak teams.
 \end{itemize}
 
@@ -1499,8 +1148,8 @@ of properties: it substantially reduces tanking (3.0\%) against adaptive
 rational agents, improves draft efficiency toward weak teams, and requires
 only a known public breakpoint date rather than complex multi-year
 infrastructure.
-The main practical objection---that teams and fans may struggle to understand
-why draft position is ``locked'' mid-season---is a communication and trust
+The main practical objection (that teams and fans may struggle to understand
+why draft position is ``locked'' mid-season) is a communication and trust
 problem, not a structural one.
 COLA achieves even lower tanking (0.5\%) and is theoretically stronger (full
 IC proof), but requires a multi-year implementation ramp.
@@ -1523,7 +1172,7 @@ Our agents act simultaneously and without observing each other's decisions,
 whereas real front offices observe each other's signals continuously.
 Finally, the external validity of our rational-agent results depends on the
 assumption that NBA front offices are approximately expected-utility
-maximizers---an assumption supported by \citet{taylor2002} and
+maximizers, an assumption supported by \citet{taylor2002} and
 \citet{schmidt2024} but not directly testable in our framework.
 
 \paragraph{Open questions.}
@@ -1531,17 +1180,28 @@ Three directions seem most promising for future work.
 First, extending the model to incorporate draft class strength as a variable
 would allow testing whether reform mechanisms remain effective in the
 generational draft years when tanking pressure is highest.
-Second, implementing LLM agents at scale---using a full 30-team league of
-language models rather than the single-mechanism 10-season test we ran---would
+Second, implementing LLM agents at scale (using a full 30-team league of
+language models rather than the single-mechanism 10-season test we ran) would
 allow testing whether strategic tanking emerges from language models' implicit
 reasoning about competitive games, and whether their behavior is qualitatively
 consistent with rational-agent predictions across all five mechanisms.
 Third, the structural question raised by our results about competitive
-balance---that tanking under the NBA lottery actually improves standings-skill
-alignment---deserves formal analysis: is there a sense in which the ``right''
+balance (that tanking under the NBA lottery actually improves standings-skill
+alignment) deserves formal analysis: is there a sense in which the ``right''
 level of tanking improves the draft lottery's redistributive efficiency?
 If so, the goal should not be to eliminate tanking entirely but to channel it
 into forms that the mechanism can exploit.
+Fourth, a hybrid of the bilevel and 3-2-1 mechanisms warrants formal study.
+Bilevel ranking eliminates post-breakpoint tanking; 3-2-1 inverts Tier~A
+incentives and thereby discourages deliberate bottom-of-the-standings
+positioning even before any lock date.
+A mechanism that applies 3-2-1 ball allocation to standings at the bilevel
+breakpoint would therefore suppress tanking in two phases: pre-breakpoint
+tanking is discouraged by the inverted Tier~A incentive, and post-breakpoint
+tanking is impossible because standings are frozen.
+Whether these two mechanisms reinforce or interfere with each other in a
+multi-season setting is an open design question with clear practical relevance
+for the NBA's ongoing reform process.
 
 % ============================================================
 %  Section 8: Bibliography
@@ -1598,7 +1258,11 @@ Association.
 
 \section{Code Repository}
 
-\draftnote{Insert link to code repository here.}
+All simulation code is available at the project repository.
+The primary entry point is \texttt{main.py}; mechanism implementations are
+in \texttt{mechanisms/}; agent logic is in \texttt{agents/}; and
+\texttt{make\_slides\_figures.py} reproduces all figures from the stored
+database.
 
 \section{Simulation Parameters}
 \label{app:params}
@@ -1634,6 +1298,76 @@ Weighted loss $t_{1/2}$ & 20 games & Exponential decay half-life \\
 \caption{Full simulation parameter table.}
 \label{tab:params}
 \end{table}
+
+\section{Simulation Output Figures}
+\label{app:figures}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/fig1_tanking_by_mechanism.png}
+\caption{Mean tanking rate (fraction of decisions with $e < 0.5$) for each
+mechanism under all-rational agents, averaged over 50 seasons.
+Error bars show one standard deviation across seasons.
+The current NBA lottery produces the highest rate (6.9\%); COLA and NBA 3-2-1
+achieve the lowest.}
+\label{fig:tanking}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/fig2_tau_by_mechanism.png}
+\caption{Mean Kendall tau distance between final standings and true skill
+ranking, for rational agents (blue) and honest agents (orange).
+Tau measures how well the draft's redistributive mechanism tracks actual team
+quality; lower is better.
+Differences across mechanisms are small, reflecting that with $V=200$ most
+teams compete seriously, limiting strategic distortion of standings.}
+\label{fig:tau}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.75\textwidth]{figures/fig3_mixed_sweep.png}
+\caption{Mixed-population sweep: aggregate tanking rate as the number of
+rational agents increases from 0 to 30 under the current NBA lottery.
+The relationship is approximately linear with no evidence of a strategic
+tipping point.}
+\label{fig:mixed}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.75\textwidth]{figures/fig4_playoff_value_sweep.png}
+\caption{Playoff-value sensitivity sweep: tanking rate under the NBA lottery
+as $V$ varies from 50 to 300.
+The decline is continuous and monotone, reflecting the probabilistic
+expected-utility model.
+At $V=200$ (baseline), tanking is concentrated among teams with negligible
+playoff probability rather than bubble teams.}
+\label{fig:pvsweep}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.75\textwidth]{figures/fig6_tanking_by_lottery_rank.png}
+\caption{Tanking decisions by team lottery rank (1 = worst record) under the
+NBA lottery with all-rational agents.
+The incentive is concentrated in lottery ranks 5--11, confirming Conjecture~2:
+with high playoff value, the tanking incentive is sharpest in the middle of
+the lottery tier, not at the absolute bottom.}
+\label{fig:byrank}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/fig7_summary_dual_axis.png}
+\caption{Summary comparison of all five mechanisms: tanking rate (left axis,
+bars) and draft efficiency for the weakest quartile (right axis, markers).
+Lower tanking and lower mean pick number are both desirable.
+NBA 3-2-1 achieves the best draft efficiency (6.57) while maintaining low
+tanking (0.9\%).}
+\label{fig:summary}
+\end{figure}
 
 \section{NBA Draft Lottery Odds Under Each Mechanism}
 \label{app:odds}
@@ -1671,5 +1405,189 @@ out of a pool of $3 \cdot 2 + 11 \cdot 3 = 39$ total balls.
 Picks 1 through 14 are all drawn sequentially from the weighted pool.}
 \label{tab:odds}
 \end{table}
+
+\section{Individual Paper Summaries}
+\label{app:paper_summaries}
+
+\subsection{\citet{banchio2020}: ``A No-Tanking Draft Allocation Policy''}
+
+\textbf{In one sentence:} This paper identifies that since any end-of-year
+ranking system will create perverse incentives, the NBA should only account
+for games up to the point at which a team first has an incentive to tank.
+
+\subsubsection*{Setting \& Model}
+\begin{itemize}
+    \item Teams are the agents, each choosing an effort level that affects
+    their probability of winning individual games and, ultimately, their
+    end-of-season rank.
+    \item The season is modeled as a sequence of pairwise games; team effort
+    translates to win probability through a parameter $\alpha$.
+    \item The league is modeled as a central planner whose objective is to
+    maximize the probability that the first draft pick is assigned to the
+    worst team, subject to the constraint that no team has an incentive to
+    tank at any point in the season.
+    \item The proposed mechanism updates lottery probabilities dynamically
+    after each game, setting each team's probability to match its current
+    likelihood of finishing last given the season history so far.
+    \item This adjustment process is terminated before continuing it would
+    violate incentive-compatibility for any team: the cutoff is endogenous to
+    the season's trajectory, not fixed in advance.
+\end{itemize}
+
+\subsubsection*{Main Results}
+\begin{itemize}
+    \item \textbf{Impossibility (Theorem 1):} Any redistributive policy that
+    relies on final standings alone to allocate draft picks will give some team
+    an incentive to lose in some possible season history. Proved by
+    contradiction.
+    \item \textbf{Positive result:} Their dynamic mechanism sidesteps the
+    impossibility by locking in lottery probabilities mid-season, before
+    tanking becomes rational. It is approximately optimal among all
+    incentive-compatible rules that operate on the same restricted set of games.
+    \item The mechanism does not guarantee the best player goes to the worst
+    team, but approximates it far better than a flat uniform lottery would.
+\end{itemize}
+
+\subsubsection*{Proof Techniques / Methodology}
+\begin{itemize}
+    \item Theorem 1: proof by contradiction.
+    \item Simulation of a single season at a time to identify the cutoff point.
+    \item Retroactively applied to the 1987 and 1989 NBA seasons: flat lottery
+    odds in those seasons means the data is not contaminated by teams already
+    behaving strategically.
+\end{itemize}
+
+\subsubsection*{Relation to Our Project}
+\begin{itemize}
+    \item Their model setup is very robust; we implement a simplified version.
+    \item We adopt their framework for a value from the draft $D$ and a value
+    from making the playoffs $V$.
+    \item We do not use their $\alpha$ parameter for effort; instead we use an
+    effort floor model in which teams cannot perfectly throw a game even at
+    minimum effort.
+\end{itemize}
+
+\subsubsection*{Critiques / Open Questions}
+\begin{itemize}
+    \item To calculate when draft odds should be locked in, the league must
+    know both $D$ and $V$ for each team; in practice these are unobservable
+    and likely heterogeneous across franchises.
+    \item The game at which draft order is set is not transparent or
+    predictable in advance, which creates fan engagement and trust problems.
+    \item Ignores game outcomes from the latter part of the season entirely,
+    which may reduce competitive effort even absent intentional tanking.
+    \item No incentive for teams to continue playing hard after the cutoff
+    point is reached.
+\end{itemize}
+
+\subsection{\citet{kazachkov2020}: ``On Tanking and Competitive Balance''}
+
+\textbf{In one sentence:} This paper introduces a bilevel ranking mechanism
+that determines non-playoff draft order by standings at a mid-season
+breakpoint rather than end of season, proving it both reduces tanking and can
+improve competitive balance relative to the current NBA system.
+
+\subsubsection*{Main Results}
+\begin{itemize}
+    \item Under the current NBA system, tanking is a dominant strategy for
+    any team effectively eliminated from playoff contention.
+    \item Under the bilevel mechanism, no team has an incentive to tank in any
+    game after the breakpoint has passed.
+    \item Simulation results show the bilevel ranking reduces tanked games by
+    57--72\% compared to the current NBA system, depending on breakpoint
+    placement.
+    \item The optimal breakpoint falls between 5/6 and 7/8 of the way through
+    the season.
+    \item We borrow their Kendall tau distance metric as our primary measure
+    of competitive balance.
+\end{itemize}
+
+\subsubsection*{Critiques / Open Questions}
+\begin{itemize}
+    \item The breakpoint must be chosen in advance; no principled method is
+    provided for determining the optimal breakpoint.
+    \item Teams could tank strategically before the breakpoint to position
+    themselves favorably.
+    \item Their simulations use rule-based agents with fixed strategies; our
+    simulation directly addresses this limitation.
+\end{itemize}
+
+\subsection{\citet{highley2026}: ``Carry-Over Lottery Allocation''}
+
+\textbf{In one sentence:} COLA achieves full incentive compatibility by giving
+every non-playoff team the same number of lottery tickets each season
+regardless of record, while still favoring persistently weak teams through
+ticket carryover across seasons.
+
+\subsubsection*{Main Results}
+\begin{itemize}
+    \item Classic COLA eliminates the in-season tanking incentive entirely:
+    ticket allocation does not depend on record.
+    \item The carryover structure preserves the competitive balance function
+    of the draft; teams that repeatedly miss the playoffs accumulate more
+    tickets over time.
+    \item Diet COLA is formally proved incentive-compatible under the
+    assumption that reaching the playoffs is always preferred to lottery access.
+    \item The Bayesian Truth Serum mechanism for identifying strong draft
+    classes is a notable methodological contribution.
+\end{itemize}
+
+\subsubsection*{Critiques / Open Questions}
+\begin{itemize}
+    \item Multi-year ticket carryover introduces significant administrative
+    complexity.
+    \item The Bayesian Truth Serum mechanism may itself be manipulable if
+    media respondents have team affiliations or financial incentives.
+    \item The IC proof depends on the assumption that all teams always prefer
+    playoff access to lottery access; if this fails more broadly, the IC
+    guarantee weakens.
+\end{itemize}
+
+\subsection{\citet{taylor2002}: ``Losing to Win''}
+
+\textbf{In one sentence:} An early empirical paper that quantified tanking
+by exploiting two lottery-regime changes to show that eliminated teams' win
+rates correlate strongly with the incentive structure of the active lottery.
+
+\subsubsection*{Main Results}
+\begin{itemize}
+    \item 1983--84: eliminated teams $2.5\times$ as likely to lose vs.\
+    expected from team quality.
+    \item 1984--85 (flat odds): effect drops to $1.3\times$.
+    \item 1990 (weighted odds restored): $2.2\times$.
+    \item Lottery structure significantly impacts the propensity of eliminated
+    teams to lose.
+\end{itemize}
+
+\subsection{\citet{schmidt2024}: ``On the Incentive Structure of Tournaments''}
+
+\textbf{In one sentence:} Uses modern portfolio theory to show that the NBA's
+2019 flattening of top-pick odds led to a measurable decline in asset
+deployment quality among lottery-contending teams, with effects disappearing
+after the reform.
+
+\subsubsection*{Main Results}
+\begin{itemize}
+    \item 2017--18: lottery-contending teams measurably underdeployed their
+    best lineups relative to a theoretically optimal frontier.
+    \item 2018--19: effect disappears after odds are flattened.
+    \item Road games show a larger tanking effect than home games.
+\end{itemize}
+
+\subsection{\citet{lenten2016}: ``Mitigation of Perverse Incentives in
+Professional Sports Leagues''}
+
+\textbf{In one sentence:} Proposes assigning draft picks by order of playoff
+elimination, arguing this locks in draft position before teams have incentive
+to lose.
+
+\subsubsection*{Main Results and Critique}
+\begin{itemize}
+    \item Controlling for other factors, teams play meaningfully better in
+    the post-elimination window than the pre-elimination window.
+    \item \citet{banchio2020} counter that this pushes the tanking incentive
+    earlier in the season rather than eliminating it, creating a race to
+    elimination rather than a race to the bottom.
+\end{itemize}
 
 \end{document}

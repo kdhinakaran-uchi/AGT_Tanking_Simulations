@@ -414,6 +414,90 @@ save("fig7_summary_dual_axis")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Fig 8: Rational vs LLM tanking rate by mechanism
+# Populated after running run_llm_sweep.py — paste run IDs from
+# llm_sweep_run_ids.txt then re-run make_slides_figures.py.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# LLM sweep runs (5 seasons each) — update after running run_llm_sweep.py
+LLM_MECHANISM_RUNS = {
+    "nba_lottery": "nba_lottery_llm5_0933bc42",
+    "bilevel": "bilevel_llm5_27f73a7f",
+    "cola": "cola_llm5_c2c9bbe0",
+    "weighted_loss_exp_hl20": "weighted_loss_exp_hl20_llm5_3ed0557f",
+    "nba_321_lottery": "nba_321_lottery_llm5_974f062b",
+}
+
+# Override nba_lottery with the existing 10-season baseline run
+LLM_MECHANISM_RUNS["nba_lottery"] = LLM_RUN
+
+if any(v is not None for v in LLM_MECHANISM_RUNS.values()):
+    print("Fig 8: Rational vs LLM tanking rate by mechanism...")
+
+    rat_rates_8 = [tanking_rate(RATIONAL_RUNS[m]) * 100 for m in MECH_KEYS]
+    llm_rates_8 = [
+        tanking_rate(LLM_MECHANISM_RUNS[m]) * 100
+        if LLM_MECHANISM_RUNS.get(m) else None
+        for m in MECH_KEYS
+    ]
+    has_llm = [r is not None for r in llm_rates_8]
+
+    fig, ax = plt.subplots(figsize=(11, 5.5))
+    x = np.arange(len(MECH_KEYS))
+    w = 0.35
+
+    bars_rat = ax.bar(x - w / 2, rat_rates_8,
+                      width=w, color=[COLORS[m] for m in MECH_KEYS],
+                      label="Rational agents (50 seasons)", alpha=0.9,
+                      edgecolor="white", linewidth=0.6)
+
+    llm_vals = [r if r is not None else 0 for r in llm_rates_8]
+    bars_llm = ax.bar(
+        [xi + w / 2 for xi, h in zip(x, has_llm) if h],
+        [r for r in llm_rates_8 if r is not None],
+        width=w,
+        color=[COLORS[m] for m, h in zip(MECH_KEYS, has_llm) if h],
+        label="LLM agents (5 seasons)", alpha=0.55,
+        edgecolor="white", linewidth=0.6,
+        hatch="///",
+    )
+
+    # Annotate rational bars
+    for bar, r in zip(bars_rat, rat_rates_8):
+        ax.text(bar.get_x() + bar.get_width() / 2, r + 0.15,
+                f"{r:.1f}%", ha="center", va="bottom",
+                fontsize=10, fontweight="bold", color="#333")
+
+    # Annotate LLM bars
+    llm_bar_iter = iter(bars_llm)
+    for m, h, r in zip(MECH_KEYS, has_llm, llm_rates_8):
+        if h:
+            bar = next(llm_bar_iter)
+            ax.text(bar.get_x() + bar.get_width() / 2, r + 0.15,
+                    f"{r:.1f}%", ha="center", va="bottom",
+                    fontsize=10, color="#555")
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([MECH_LABEL_SHORT[m] for m in MECH_KEYS], fontsize=12)
+    ax.set_ylabel("Tanking rate (%)", fontsize=12)
+    ax.set_title(
+        "Rational vs. LLM Agent Tanking Rate by Mechanism\n"
+        "(Rational: 50 seasons · LLM: 5 seasons · V = 200)",
+        fontsize=13, fontweight="bold",
+    )
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    hi = max(max(rat_rates_8), max(r for r in llm_rates_8 if r is not None))
+    ax.set_ylim(0, hi * 1.35 + 1)
+
+    ax.legend(fontsize=11)
+
+    plt.tight_layout()
+    save("fig8_rational_vs_llm_by_mechanism")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Finish
 # ══════════════════════════════════════════════════════════════════════════════
 

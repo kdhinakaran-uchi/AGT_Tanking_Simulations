@@ -64,6 +64,18 @@ class NBAThreeTwoOneLottery(DraftMechanism):
             "Consecutive top-pick winners face eligibility restrictions."
         )
 
+    @property
+    def llm_decision_note(self) -> str:
+        return (
+            "3-2-1 STRATEGY NOTE: Under this mechanism the incentive for the very worst "
+            "teams is INVERTED. Tier A (bottom 3 records) receives only 2 lottery balls, "
+            "while Tier B (4th-14th worst) receives 3 balls — so finishing 4th-worst gives "
+            "BETTER lottery odds than finishing 1st-worst. If you are projected to finish in "
+            "the bottom 3, you should compete harder to reach Tier B (4th-14th worst) and "
+            "improve your lottery odds. Only reduce effort if you are safely in Tier B and "
+            "cannot realistically reach the playoffs."
+        )
+
     # ── ball pool ──────────────────────────────────────────────────────────────
 
     def _build_pool(

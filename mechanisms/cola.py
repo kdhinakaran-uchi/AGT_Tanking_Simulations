@@ -67,6 +67,20 @@ class COLAMechanism(DraftMechanism):
             penalty = _TICKET_PENALTY.get(pick_map.get(team.team_id, 99), 0)
             team.lottery_tickets = max(0, team.lottery_tickets - penalty)
 
+    def rank_affects_lottery(self, games_completed: int, total_games: int) -> bool:
+        return False  # within-season record never affects lottery odds under COLA
+
+    @property
+    def llm_decision_note(self) -> str:
+        return (
+            "COLA STRATEGY NOTE: Under COLA, this season's win-loss record has NO effect "
+            "on your lottery odds. Every non-playoff team earns exactly 1 ticket this season "
+            "regardless of record. Tanking cannot improve your lottery position. "
+            "The only decision that matters for lottery purposes is whether you make the "
+            "playoffs or not. Always exert full effort unless playoff contention is realistic "
+            "and you are choosing to compete for it."
+        )
+
     def expected_pick_values(
         self,
         n_lottery_teams: int,

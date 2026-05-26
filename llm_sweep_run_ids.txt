@@ -1,0 +1,11 @@
+
+============================================================
+Paste these into make_slides_figures.py:
+============================================================
+LLM_MECHANISM_RUNS = {
+    "nba_lottery": "nba_lottery_llm5_0933bc42",
+    "bilevel": "bilevel_llm5_27f73a7f",
+    "cola": "cola_llm5_c2c9bbe0",
+    "weighted_loss_exp_hl20": "weighted_loss_exp_hl20_llm5_3ed0557f",
+    "nba_321_lottery": "nba_321_lottery_llm5_974f062b",
+}

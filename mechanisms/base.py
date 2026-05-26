@@ -63,3 +63,13 @@ class DraftMechanism(ABC):
     def on_season_end(self, teams: list, results: list[DraftResult]) -> None:
         """Hook called after draft to update multi-season state (e.g. COLA ticket balances)."""
         pass
+
+    @property
+    def llm_decision_note(self) -> str:
+        """Mechanism-specific strategy guidance injected into the LLM system prompt.
+
+        Override to communicate non-obvious incentive properties that the agent
+        might not infer from the description alone (e.g. inverted incentives,
+        locked draft position, equal-odds structure).
+        """
+        return ""

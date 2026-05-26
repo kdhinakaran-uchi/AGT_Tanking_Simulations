@@ -32,6 +32,19 @@ class BilevelMechanism(DraftMechanism):
             f"of the season. Before the lock, incentives are similar to the current NBA lottery."
         )
 
+    @property
+    def llm_decision_note(self) -> str:
+        return (
+            f"BILEVEL STRATEGY NOTE: Lottery draft position is locked at game "
+            f"{self.lock_game} (~{int(self.lock_game/82*100)}% through the season). "
+            f"After game {self.lock_game}, your draft slot is already set — reducing "
+            f"effort after that point has ZERO lottery benefit. Before game "
+            f"{self.lock_game}, incentives mirror the standard NBA lottery (worse "
+            f"record = better weighted odds). If you are going to accept worse lottery "
+            f"odds by tanking, you must do so before game {self.lock_game}; tanking "
+            f"in the final stretch of the season helps nobody."
+        )
+
     def record_lock_snapshot(self, teams: list[Team]) -> None:
         """Called by the season at game lock_game to snapshot current win totals."""
         self._locked_wins = {t.team_id: t.wins for t in teams}
