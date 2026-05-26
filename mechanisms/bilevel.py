@@ -39,6 +39,10 @@ class BilevelMechanism(DraftMechanism):
     def rank_affects_lottery(self, games_completed: int, total_games: int) -> bool:
         return games_completed < self.lock_game
 
+    def lottery_games_remaining(self, games_completed: int, games_remaining: int) -> int:
+        """Only games before the lock point affect lottery rank."""
+        return max(0, self.lock_game - games_completed)
+
     def run_draft(
         self,
         teams: list[Team],

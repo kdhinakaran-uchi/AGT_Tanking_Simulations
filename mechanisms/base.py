@@ -52,6 +52,14 @@ class DraftMechanism(ABC):
         """True if results of games still being played affect this team's lottery draft order."""
         return True
 
+    def lottery_games_remaining(self, games_completed: int, games_remaining: int) -> int:
+        """Games left that still affect lottery position.
+
+        Default: all remaining games matter (final record determines lottery odds).
+        Override for mechanisms like bilevel where lottery rank is locked mid-season.
+        """
+        return games_remaining
+
     def on_season_end(self, teams: list, results: list[DraftResult]) -> None:
         """Hook called after draft to update multi-season state (e.g. COLA ticket balances)."""
         pass

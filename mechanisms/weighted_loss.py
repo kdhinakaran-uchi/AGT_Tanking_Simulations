@@ -66,6 +66,7 @@ class WeightedLossMechanism(DraftMechanism):
         self.weight_fn = weight_fn or exponential_decay(20.0)
         self.weight_fn_name = weight_fn_name
         self._weighted_losses: dict[int, float] = defaultdict(float)
+        self._lgr_cache: dict[tuple[int, int], int] = {}  # lottery_games_remaining cache
 
     @property
     def name(self) -> str:
@@ -87,6 +88,26 @@ class WeightedLossMechanism(DraftMechanism):
 
     def rank_affects_lottery(self, games_completed: int, total_games: int) -> bool:
         return self.weight_fn(games_completed, total_games) > 1e-6
+
+    def lottery_games_remaining(self, games_completed: int, games_remaining: int) -> int:
+        """Effective remaining lottery games, discounted by the weight decay.
+
+        A loss at game g contributes w(g) to the lottery score, so the
+        rational agent should value future tanking by the remaining weight sum
+        rather than raw game count.  Results are cached since the same
+        (games_completed, games_remaining) pair is queried many times per run.
+        """
+        if games_remaining <= 0:
+            return 0
+        key = (games_completed, games_remaining)
+        if key not in self._lgr_cache:
+            total = games_completed + games_remaining
+            future_weight = sum(
+                self.weight_fn(games_completed + i, total)
+                for i in range(1, games_remaining + 1)
+            )
+            self._lgr_cache[key] = max(0, round(future_weight))
+        return self._lgr_cache[key]
 
     def run_draft(
         self,

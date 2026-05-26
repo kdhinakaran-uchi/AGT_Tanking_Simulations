@@ -1,7 +1,8 @@
+import math
 from agents.base import Agent, DecisionContext
 from simulation.game import win_probability
 
-PLAYOFF_VALUE = 50.0
+PLAYOFF_VALUE = 200.0
 
 # Declining pick values calibrated to reflect real NBA draft pick trade value.
 PICK_VALUES: dict[int, float] = {
@@ -56,26 +57,50 @@ class RationalAgent(Agent):
         avg_skill = sum(t.true_skill for t in ctx.standings) / n
 
         p_win = win_probability(ctx.team.true_skill, effort, avg_skill, 1.0)
-        exp_final_wins = ctx.team.wins + ctx.games_remaining * p_win
 
-        # Project all other teams assuming they play at full effort
-        teams_ahead = sum(
+        # --- Playoff probability (normal approximation) ---
+        # Project each other team's final wins at full effort.
+        exp_final_wins = ctx.team.wins + ctx.games_remaining * p_win
+        other_projected = sorted(
+            [
+                t.wins + (ctx.total_games - t.games_played)
+                * win_probability(t.true_skill, 1.0, avg_skill, 1.0)
+                for t in ctx.standings
+                if t.team_id != ctx.team.team_id
+            ],
+            reverse=True,
+        )
+        # Wins needed to rank in top playoff_spots among all 30 teams: beat the
+        # team that would otherwise occupy the last playoff spot.
+        playoff_cutoff = other_projected[ctx.playoff_spots - 1]
+
+        # Binomial std-dev of our final win total.
+        sigma = math.sqrt(max(1e-9, ctx.games_remaining * p_win * (1.0 - p_win)))
+        z = (playoff_cutoff - exp_final_wins) / sigma
+        p_playoff = 0.5 * math.erfc(z / math.sqrt(2.0))
+
+        # --- Lottery EV ---
+        lottery_games_mine = ctx.mechanism.lottery_games_remaining(
+            ctx.games_completed, ctx.games_remaining
+        )
+        exp_wins_at_lock = ctx.team.wins + lottery_games_mine * p_win
+
+        teams_ahead_lottery = sum(
             1
             for t in ctx.standings
             if t.team_id != ctx.team.team_id
-            and t.wins + (ctx.total_games - t.games_played)
-                * win_probability(t.true_skill, 1.0, avg_skill, 1.0)
-            > exp_final_wins
+            and t.wins + ctx.mechanism.lottery_games_remaining(
+                    t.games_played, ctx.total_games - t.games_played
+                ) * win_probability(t.true_skill, 1.0, avg_skill, 1.0)
+            > exp_wins_at_lock
         )
-        exp_rank = teams_ahead + 1  # 1 = best team
+        exp_lock_rank = teams_ahead_lottery + 1
+        lottery_rank = max(1, min(n + 1 - exp_lock_rank, n_lottery))
 
-        if exp_rank <= ctx.playoff_spots:
-            return self._playoff_value
-
-        # EV table rank 1 = worst overall team = best lottery odds.
-        # exp_rank 1 = best team, so we invert: lottery_rank = n_teams + 1 - exp_rank.
-        n_teams = len(ctx.standings)
-        lottery_rank = max(1, min(n_teams + 1 - exp_rank, n_lottery))
         if self._ev_table:
-            return self._ev_table.get(lottery_rank, DEFAULT_PICK_VALUE)
-        return PICK_VALUES.get(lottery_rank, DEFAULT_PICK_VALUE)
+            lottery_ev = self._ev_table.get(lottery_rank, DEFAULT_PICK_VALUE)
+        else:
+            lottery_ev = PICK_VALUES.get(lottery_rank, DEFAULT_PICK_VALUE)
+
+        # Blend: EU = P(playoffs)×playoff_value + P(lottery)×lottery_ev
+        return p_playoff * self._playoff_value + (1.0 - p_playoff) * lottery_ev

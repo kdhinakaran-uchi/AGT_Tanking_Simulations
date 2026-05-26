@@ -50,30 +50,17 @@ class Season:
         total_decisions = 0
         tanking_decisions = 0
 
-        # Checkpoint 0: decisions before the first game
-        checkpoint_num = 0
-        for team in self.teams:
-            ctx = self._ctx(team, checkpoint_num, 0)
-            effort, reasoning = self.agents[team.team_id].decide(ctx)
-            effort = _clip(effort)
-            current_efforts[team.team_id] = effort
-            total_decisions += 1
-            if effort < 0.5:
-                tanking_decisions += 1
-            if self.db:
-                self.db.insert_decision(
-                    self.run_id, self.season, checkpoint_num, team.team_id,
-                    0, self.games_per_team, team.wins, team.losses,
-                    self._rank(team), effort, reasoning,
-                    type(self.agents[team.team_id]).__name__,
-                )
+        # For bilevel: convert lock_game (per-team games) to approximate schedule game index.
+        n_teams = len(self.teams)
+        _lock_schedule_game = getattr(self.mechanism, "lock_game", -1) * n_teams // 2
 
+        checkpoint_num = 0
         for game_idx, (id_a, id_b) in enumerate(schedule):
             # New checkpoint?
             if game_idx > 0 and game_idx % self.checkpoint_interval == 0:
                 checkpoint_num = game_idx // self.checkpoint_interval
                 for team in self.teams:
-                    ctx = self._ctx(team, checkpoint_num, game_idx)
+                    ctx = self._ctx(team, checkpoint_num)
                     effort, reasoning = self.agents[team.team_id].decide(ctx)
                     effort = _clip(effort)
                     current_efforts[team.team_id] = effort
@@ -83,15 +70,15 @@ class Season:
                     if self.db:
                         self.db.insert_decision(
                             self.run_id, self.season, checkpoint_num, team.team_id,
-                            game_idx, self.games_per_team - team.games_played,
+                            team.games_played, self.games_per_team - team.games_played,
                             team.wins, team.losses, self._rank(team),
                             effort, reasoning, type(self.agents[team.team_id]).__name__,
                         )
 
-            # Bilevel: snapshot standings when we hit the lock game
+            # Bilevel: snapshot standings when schedule reaches the lock point.
             if (
                 hasattr(self.mechanism, "record_lock_snapshot")
-                and game_idx == getattr(self.mechanism, "lock_game", -1)
+                and game_idx == _lock_schedule_game
             ):
                 self.mechanism.record_lock_snapshot(self.teams)  # type: ignore[attr-defined]
 
@@ -107,7 +94,10 @@ class Season:
 
             # Hook for mechanisms that track per-game outcomes (e.g. WeightedLossMechanism)
             if hasattr(self.mechanism, "record_game_loss"):
-                self.mechanism.record_game_loss(game_idx, loser.team_id, self.games_per_team)
+                # Convert schedule game index to per-team game equivalent so weight
+                # functions calibrated in per-team games (0-82) get the right scale.
+                per_team_game = game_idx * 2 / n_teams
+                self.mechanism.record_game_loss(per_team_game, loser.team_id, self.games_per_team)
 
             if self.db:
                 self.db.insert_game(
@@ -149,11 +139,11 @@ class Season:
             avg_effort=avg_effort,
         )
 
-    def _ctx(self, team: Team, checkpoint: int, games_completed: int) -> DecisionContext:
+    def _ctx(self, team: Team, checkpoint: int) -> DecisionContext:
         return DecisionContext(
             season=self.season,
             checkpoint=checkpoint,
-            games_completed=games_completed,
+            games_completed=team.games_played,
             games_remaining=self.games_per_team - team.games_played,
             total_games=self.games_per_team,
             team=team,

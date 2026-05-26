@@ -54,7 +54,7 @@ GAMES_PER_TEAM = 82
 CHECKPOINT_INTERVAL = 10
 SNAPSHOT_INTERVAL = 10
 DEFAULT_SEASONS = 50
-DEFAULT_PLAYOFF_VALUE = 50.0
+DEFAULT_PLAYOFF_VALUE = 200.0
 
 NBA_TEAM_NAMES = [
     "Hawks", "Celtics", "Nets", "Hornets", "Bulls", "Cavaliers", "Mavericks",
@@ -101,6 +101,7 @@ def run_experiment(
     n_rational: int = N_TEAMS,  # for mixed: how many rational agents (rest honest)
     playoff_value: float = DEFAULT_PLAYOFF_VALUE,
     label: str | None = None,
+    checkpoint_interval: int = CHECKPOINT_INTERVAL,
 ) -> str:
     rng = random.Random(seed)
     teams = create_teams(seed)
@@ -165,7 +166,7 @@ def run_experiment(
             season=s,
             playoff_spots=PLAYOFF_SPOTS,
             games_per_team=GAMES_PER_TEAM,
-            checkpoint_interval=CHECKPOINT_INTERVAL,
+            checkpoint_interval=checkpoint_interval,
             run_id=run_id,
             db=db,
             rng=random.Random(rng.randint(0, 2**31)),
@@ -218,6 +219,7 @@ def run_standard(args, db):
         rid = run_experiment(
             mech, args.agent, args.seasons, db,
             seed=args.seed, playoff_value=args.playoff_value,
+            checkpoint_interval=args.checkpoint_interval,
         )
         run_ids.append(rid)
         print(f"  Completed in {time.time()-t0:.1f}s  |  run_id={rid}")
@@ -287,6 +289,11 @@ def main() -> None:
     parser.add_argument("--agent", choices=["rational", "honest", "llm", "mixed"], default="rational")
     parser.add_argument("--seasons", type=int, default=DEFAULT_SEASONS)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--checkpoint-interval", type=int, default=CHECKPOINT_INTERVAL,
+        help="Schedule-game interval between agent decisions (default: 10). "
+             "For LLM agents, use ~154 to get ~8 decisions per team per season."
+    )
     parser.add_argument("--db", default="tanking_sim.db")
     parser.add_argument("--output", default="results")
     parser.add_argument("--no-db", action="store_true")
